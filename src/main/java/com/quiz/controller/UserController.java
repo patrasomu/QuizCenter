@@ -4,6 +4,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +16,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -124,4 +127,34 @@ public class UserController {
 	public User getUserDetails(@PathVariable("username") String username) throws Exception{
 		return this.userService.getUserDetails(username);
 	}
+
+    /* Logout User by providing Username & Password */
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(@RequestBody User user, HttpServletRequest request, HttpServletResponse response) {
+        Authentication currentAuth = SecurityContextHolder.getContext().getAuthentication();
+        if (currentAuth == null || !currentAuth.isAuthenticated()) {
+            return new ResponseEntity<>("No active session.", HttpStatus.UNAUTHORIZED);
+        }
+
+        String currentUsername = currentAuth.getName();
+        if (!currentUsername.equals(user.getUsername())) {
+            return new ResponseEntity<>("Username does not match authenticated user.", HttpStatus.FORBIDDEN);
+        }
+
+        try {
+            User stored = this.userService.getUser(user.getUsername());
+            if (stored == null || !bCryptPasswordEncoder.matches(user.getPassword(), stored.getPassword())) {
+                return new ResponseEntity<>("Invalid credentials.", HttpStatus.UNAUTHORIZED);
+            }
+
+            new SecurityContextLogoutHandler().logout(request, response, currentAuth);
+            SecurityContextHolder.clearContext();
+            return new ResponseEntity<>("User signed-out successfully!.", HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Error during logout.", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
+
 }
